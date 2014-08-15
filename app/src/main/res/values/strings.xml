@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">NZ Highway</string>
+    <string name="title_activity_maps">NZ Highway</string>
+    <string name="google_maps_key">AIzaSyDma-REWVtg8idkEs1eQcfTbND8Lp3KXMQ</string>
+
+</resources>
