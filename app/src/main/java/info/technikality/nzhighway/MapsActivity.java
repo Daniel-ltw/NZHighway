@@ -22,6 +22,13 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
+import org.apache.http.HttpResponse;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.message.BasicNameValuePair;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
@@ -37,12 +44,14 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.ProtocolException;
-import java.net.URI;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+
+import info.technikality.nzhighway.LRMS.LQJlrmsPoint;
+import info.technikality.nzhighway.LRMS.LQJLrmsPortBinding;
 
 import static info.technikality.nzhighway.XMLAdapter.Entry;
 
@@ -177,23 +186,20 @@ public class MapsActivity extends FragmentActivity {
                 Elements values = results[1];
 
                 // remove entry that does not have 3 points to trilaterate
-                while ((i + 1) < entryList.size() && (labels.size() < 16
+                /*while ((i + 1) < entryList.size() && (labels.size() < 16
                         || labels.get(8).childNodeSize() != 0
                         || labels.get(9).childNodeSize() != 0
-                        /*|| !value.get(12).text().equalsIgnoreCase("Active")*/)) {
+                        *//*|| !value.get(12).text().equalsIgnoreCase("Active")*//*)) {
                    results = dataQuery(i++);
                    labels = results[0];
                    values = results[1];
-                }
+                }*/
 
                 // check for last entry
-                if (i >= entryList.size() - 1) {
-                    // would skip the last entry
-                    // TODO
+                /*if (i >= entryList.size() - 1) {
                     return treis;
-                }
+                }*/
 
-                // TODO
                 // have to fix this to reduce the need to store redundant data
                 // proceed to the trilateration with this data immediately
                 // need not store
@@ -206,9 +212,9 @@ public class MapsActivity extends FragmentActivity {
                 // 5 for Detour description
                 // 12 for active
                 // 7,8,9 for the 3 points
-                ArrayList<Object[]> store = new ArrayList<Object[]>();
+                //ArrayList<Object[]> store = new ArrayList<Object[]>();
 
-                for (int j = 7; j <= 9; j++) {
+                /*for (int j = 7; j <= 9; j++) {
                     Object[] objects = null;
                     while (objects == null) {
                         objects = retrieveCoordinates(values.get(j).text().split(" of "));
@@ -216,7 +222,27 @@ public class MapsActivity extends FragmentActivity {
                     store.add(objects);
                 }
 
-                LatLng coord = trilaterate(store);
+                LatLng coord = trilaterate(store);*/
+
+                // Comment out trilateration
+                // TODO work on SOAP request on LRMS
+                // LRMS code with a 1 RS
+                // 0 = SH code
+                // 1 = RS code
+                // 2 = distance in KM
+                // 3 = direction
+                String[] strip = values.get(1).text().split("-| |/");
+
+                LatLng coord = locationQuery(strip);
+
+                // check for null coord
+                // if null skip and move on
+                while(coord == null) {
+                    results = dataQuery(i++);
+                    values = results[1];
+                    strip = values.get(1).text().split("-| |/");
+                    coord = locationQuery(strip);
+                }
 
                 MarkerOptions mo = new MarkerOptions().position(coord).title(values.get(3).text() + " - "
                         + values.get(2).text()).snippet("What: " + values.get(4).text() + "\n\n"
@@ -252,6 +278,20 @@ public class MapsActivity extends FragmentActivity {
                 e.printStackTrace();
             }
 
+            return null;
+        }
+        
+        private LatLng locationQuery(String[] values) {
+            try {
+                LQJlrmsPoint lm = new LQJLrmsPortBinding().locatePointAlongRs(values[0],
+                        Integer.parseInt(values[1]), Double.parseDouble(values[2]) * 1000,
+                        (values[3] == null || values[3].equals(""))? "B":values[3], 4326);
+                // lm y = latitude
+                // lm x = longitude
+                return new LatLng(lm.y,lm.x);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
             return null;
         }
 
