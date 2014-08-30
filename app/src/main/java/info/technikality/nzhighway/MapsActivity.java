@@ -177,12 +177,13 @@ public class MapsActivity extends FragmentActivity {
                 Elements values = results[1];
 
                 // remove entry that does not have 3 points to trilaterate
-                // or the incident is not active
                 while ((i + 1) < entryList.size() && (labels.size() < 16
                         || labels.get(8).childNodeSize() != 0
                         || labels.get(9).childNodeSize() != 0
                         /*|| !value.get(12).text().equalsIgnoreCase("Active")*/)) {
-                    dataQuery(i++);
+                   results = dataQuery(i++);
+                   labels = results[0];
+                   values = results[1];
                 }
 
                 // check for last entry
@@ -197,6 +198,7 @@ public class MapsActivity extends FragmentActivity {
                 // proceed to the trilateration with this data immediately
                 // need not store
 
+                // 1 is LRMS code
                 // 3 & 2 for title
                 // 4 for What description
                 // 0 for Where description
@@ -217,7 +219,7 @@ public class MapsActivity extends FragmentActivity {
                 LatLng coord = trilaterate(store);
 
                 MarkerOptions mo = new MarkerOptions().position(coord).title(values.get(3).text() + " - "
-                        + values.get(2).text()).snippet("What: " + values.get(4).text() + "\n"
+                        + values.get(2).text()).snippet("What: " + values.get(4).text() + "\n\n"
                         + "Where: " + values.get(0).text() + "\n");
 
                 if (markerList == null) {
@@ -302,9 +304,12 @@ public class MapsActivity extends FragmentActivity {
         }
 
         private LatLng trilaterate (ArrayList<Object[]> store) {
-            // trilateration
-            double[] eX = new double[2]; // unit vector in direction from P1 to P2
-            double[] eY = new double[2]; // unit vector in direction from P1 to P2
+            // refactored trilateration algorithm based on
+            // http://gis.stackexchange.com/questions/66/trilateration-using-3-latitude-and-longitude-points-and-3-distances
+            int earthR = 6371;
+            double[] eX = new double[3];
+            double[] eY = new double[3];
+            double[] eZ = new double[3];
 
             double p1x = ((LatLng)store.get(0)[2]).latitude;
             double p2x = ((LatLng)store.get(1)[2]).latitude;
@@ -314,50 +319,82 @@ public class MapsActivity extends FragmentActivity {
             double p2y = ((LatLng)store.get(1)[2]).longitude;
             double p3y = ((LatLng)store.get(2)[2]).longitude;
 
-            double r1 = Double.parseDouble((String) store.get(0)[0]) * 1000000.0;
-            double r2 = Double.parseDouble((String) store.get(1)[0]) * 1000000.0;
-            double r3 = Double.parseDouble((String) store.get(2)[0]) * 1000000.0;
+            double r1 = ( Double.parseDouble((String) store.get(0)[0]) + 0.50 );
+            double r2 = ( Double.parseDouble((String) store.get(1)[0]) + 0.50 );
+            double r3 = ( Double.parseDouble((String) store.get(2)[0]) + 0.50 );
 
-	    	/* Calculating i, the signed magnitude of the x component from P1 to P3 */
-            double deltaX = (p2x - p1x);
-            double deltaY = (p2y - p1y);
-            double norm = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-            double d = norm;
+            double xA = earthR *(Math.cos(Math.toRadians(p1x)) * Math.cos(Math.toRadians(p1y)));
+            double yA = earthR *(Math.cos(Math.toRadians(p1x)) * Math.sin(Math.toRadians(p1y)));
+            double zA = earthR *(Math.sin(Math.toRadians(p1x)));
 
-            eX[0] = deltaX / norm;
-            eX[1] = deltaY / norm;
+            double xB = earthR *(Math.cos(Math.toRadians(p2x)) * Math.cos(Math.toRadians(p2y)));
+            double yB = earthR *(Math.cos(Math.toRadians(p2x)) * Math.sin(Math.toRadians(p2y)));
+            double zB = earthR *(Math.sin(Math.toRadians(p2x)));
 
-            deltaX = (p3x - p1x);
-            deltaY = (p3y - p1y);
-            double i = eX[0] * deltaX + eX[1] * deltaY;
+            double xC = earthR *(Math.cos(Math.toRadians(p3x)) * Math.cos(Math.toRadians(p3y)));
+            double yC = earthR *(Math.cos(Math.toRadians(p3x)) * Math.sin(Math.toRadians(p3y)));
+            double zC = earthR *(Math.sin(Math.toRadians(p3x)));
 
-    		/* Calculating j, the signed magnitude of the y component from P1 to P3 */
-            deltaX = (p3x - p1x - i * eX[0]);
-            deltaY = (p3y - p1y - i * eX[1]);
-            norm = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            // A to B
+            double deltaX = (xB - xA);
+            double deltaY = (yB - yA);
+            double deltaZ = (zB - zA);
+            double abNorm = Math.pow(Math.pow(Math.abs(deltaX), 2) + Math.pow(Math.abs(deltaY), 2)
+                    + Math.pow(Math.abs(deltaZ), 2),0.5);
+            double d = abNorm;
+            eX[0] = deltaX / abNorm;
+            eX[1] = deltaY / abNorm;
+            eX[2] = deltaZ / abNorm;
 
-            eY[0] = deltaX / norm;
-            eY[1] = deltaY / norm;
+            // A to C
+            deltaX = (xC - xA);
+            deltaY = (yC - yA);
+            deltaZ = (zC - zA);
+            // dot product of eX with AC
+            double i = (eX[0] * deltaX) + (eX[1] * deltaY) + (eX[2] * deltaZ);
+            double acNorm = Math.pow(Math.pow(Math.abs(deltaX - (eX[0] * i)), 2)
+                    + Math.pow(Math.abs(deltaY - (eX[1] * i)), 2)
+                    + Math.pow(Math.abs(deltaZ - (eX[2] * i)), 2),0.5);
+            eY[0] = (deltaX - (eX[0] * i)) / acNorm;
+            eY[1] = (deltaY - (eX[1] * i)) / acNorm;
+            eY[2] = (deltaZ - (eX[2] * i)) / acNorm;
 
-            deltaX = (p3x - p1x);
-            deltaY = (p3y - p1y);
-            double j = eY[0] * deltaX + eY[1] * deltaY;
+            eZ[0] = (eX[1] * eY[2]) - (eX[2] * eY[1]);
+            eZ[1] = (eX[2] * eY[0]) - (eX[0] * eY[2]);
+            eZ[2] = (eX[0] * eY[1]) - (eX[1] * eY[0]);
 
-		    /* Calculate x */
+            double j = (eY[0] * deltaX) + (eY[1] * deltaY) + (eY[2] * deltaZ);
+
             double x = (r1 * r1 - r2 * r2 + d * d) / (2 * d);
-            double x2 = x;
-
-		    /* Calculate y */
             double y = (((r1 * r1) - (r3 * r3) + (i * i) + (j * j)) / (2 * j)) - ((i / j) * x);
+            double z = Double.parseDouble(sqrtImaginaryNum((r1 * r1) - (x * x) - (y * y)));
 
-            x = p1x + x * eX[0] + y * eY[0];
-            y = p1y + x2 * eX[1] + y * eY[1];
+            //triPt is an array with ECEF x,y,z of trilateration point
+            double[] triPt = new double[3];
+            triPt[0] = xA + x*eX[0] + y*eY[0] + z*eZ[0];
+            triPt[1] = yA + x*eX[1] + y*eY[1] + z*eZ[1];
+            triPt[2] = zA + x*eX[2] + y*eY[2] + z*eZ[2];
+
+            //convert back to lat/long from ECEF
+            //convert to degrees
+            double lat = Math.toDegrees(Math.asin(triPt[2] / earthR));
+            double lon = Math.toDegrees(Math.atan2(triPt[1],triPt[0]));
 
             Location loc = new Location("");
-            loc.setLongitude(y);
-            loc.setLatitude(x);
+            loc.setLatitude(lat);
+            loc.setLongitude(lon);
 
             return new LatLng(loc.getLatitude(), loc.getLongitude());
+        }
+
+        private String sqrtImaginaryNum(double i) {
+            String str = "";
+            double sqrtI = Math.sqrt(Math.abs(i));
+            if (i < 0) {
+
+                return str += "-" + sqrtI;
+            }
+            return str += sqrtI;
         }
     }
 
@@ -649,7 +686,6 @@ public class MapsActivity extends FragmentActivity {
             @Override
             public View getInfoContents(Marker marker) {
                 TextView tv = new TextView(getBaseContext());
-                tv.setTextIsSelectable(false);
                 tv.setMinLines(5);
                 tv.setText(marker.getTitle() + "\n\n" + marker.getSnippet());
                 return tv;
@@ -661,7 +697,7 @@ public class MapsActivity extends FragmentActivity {
         mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener() {
             @Override
             public boolean onMarkerClick(Marker marker) {
-                Toast.makeText(getBaseContext(), marker.getSnippet(), Toast.LENGTH_LONG).show();
+                Toast.makeText(getBaseContext(), marker.getTitle(), Toast.LENGTH_LONG).show();
                 return false;
             }
         });
