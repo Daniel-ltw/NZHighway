@@ -274,8 +274,8 @@ public class MapsActivity extends FragmentActivity implements RoutingListener, G
 
                     boolean currentNavigate = false;
 
-                    if (toAddress.equalsIgnoreCase("me")) {
-                        toAddress = mMap.getMyLocation().getLatitude() + ","
+                    if (fromAddress.equalsIgnoreCase("me")) {
+                        fromAddress = mMap.getMyLocation().getLatitude() + ","
                                 + mMap.getMyLocation().getLongitude();
                         currentNavigate = true;
                     }
