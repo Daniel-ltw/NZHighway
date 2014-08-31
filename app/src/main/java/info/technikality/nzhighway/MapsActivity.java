@@ -51,7 +51,7 @@ import info.technikality.nzhighway.Route.RoutingListener;
 
 import static info.technikality.nzhighway.XMLAdapter.Entry;
 
-public class MapsActivity extends FragmentActivity implements RoutingListener {
+public class MapsActivity extends FragmentActivity implements RoutingListener, GoogleMap.OnMyLocationChangeListener {
 
     public static final String WIFI = "Wi-Fi";
     public static final String ANY = "Any";
@@ -67,9 +67,11 @@ public class MapsActivity extends FragmentActivity implements RoutingListener {
     private static List<MarkerOptions> markerList = null;
 
     private RoutingListener routeListen;
+    private GoogleMap.OnMyLocationChangeListener locationChangeListen;
     private GoogleMap mMap; // Might be null if Google Play services APK is not available.
     private String fromAddress;
     private String toAddress;
+    private long timestamp = -1;
 
     @Override
     public void onRoutingFailure() {
@@ -95,6 +97,7 @@ public class MapsActivity extends FragmentActivity implements RoutingListener {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
         routeListen = this;
+        locationChangeListen = this;
 
         sPref = ANY;
         NetworkInfo[] allNetworkInfo = ((ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE)).getAllNetworkInfo();
@@ -268,22 +271,20 @@ public class MapsActivity extends FragmentActivity implements RoutingListener {
                 } else if (queryMessage.contains("To: ")) {
                     toAddress = value.toString();
 
+                    if (toAddress.equalsIgnoreCase("me")) {
+                        toAddress = mMap.getMyLocation().getLatitude() + ","
+                                + mMap.getMyLocation().getLongitude();
+                    }
+
                     clearMap();
 
-                    final Routing routing = new Routing(Routing.TravelMode.DRIVING);
+                    Routing routing = new Routing(Routing.TravelMode.DRIVING);
                     routing.registerListener(routeListen);
                     routing.execute(fromAddress,toAddress);
 
                     // set navigation to auto update
-                    mMap.setOnMyLocationChangeListener(new GoogleMap.OnMyLocationChangeListener() {
-                        @Override
-                        public void onMyLocationChange(Location location) {
-                            String currentLocation = "" + location.getLatitude() + ","
-                                    + location.getLongitude();
-                            clearMap();
-                            routing.execute(currentLocation, toAddress);
-                        }
-                    });
+                    mMap.setOnMyLocationChangeListener(locationChangeListen);
+                    timestamp = System.currentTimeMillis();
                 }
             }
         }).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
@@ -307,6 +308,21 @@ public class MapsActivity extends FragmentActivity implements RoutingListener {
         mMap.clear();
         for (MarkerOptions m:markerList) {
             mMap.addMarker(m);
+        }
+    }
+
+    @Override
+    public void onMyLocationChange(Location location) {
+        if (timestamp != -1 && timestamp <= (System.currentTimeMillis() - 60000)) {
+
+            String currentLocation = "" + location.getLatitude() + ","
+                    + location.getLongitude();
+            clearMap();
+
+            Routing routing = new Routing(Routing.TravelMode.DRIVING);
+            routing.registerListener(routeListen);
+            routing.execute(currentLocation, toAddress);
+            timestamp = System.currentTimeMillis();
         }
     }
 
