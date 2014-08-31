@@ -72,6 +72,7 @@ public class MapsActivity extends FragmentActivity implements RoutingListener, G
     private String fromAddress;
     private String toAddress;
     private long timestamp = -1;
+    private Location current;
 
     @Override
     public void onRoutingFailure() {
@@ -271,9 +272,12 @@ public class MapsActivity extends FragmentActivity implements RoutingListener, G
                 } else if (queryMessage.contains("To: ")) {
                     toAddress = value.toString();
 
+                    boolean currentNavigate = false;
+
                     if (toAddress.equalsIgnoreCase("me")) {
                         toAddress = mMap.getMyLocation().getLatitude() + ","
                                 + mMap.getMyLocation().getLongitude();
+                        currentNavigate = true;
                     }
 
                     clearMap();
@@ -282,9 +286,17 @@ public class MapsActivity extends FragmentActivity implements RoutingListener, G
                     routing.registerListener(routeListen);
                     routing.execute(fromAddress,toAddress);
 
-                    // set navigation to auto update
-                    mMap.setOnMyLocationChangeListener(locationChangeListen);
-                    timestamp = System.currentTimeMillis();
+                    if (currentNavigate) {
+                        // set navigation to auto update
+                        mMap.setOnMyLocationChangeListener(locationChangeListen);
+                        timestamp = System.currentTimeMillis();
+                        current = mMap.getMyLocation();
+                    } else {
+                        // reset it if user decides use the application
+                        // to plan
+                        mMap.setOnMyLocationChangeListener(null);
+                        timestamp = -1;
+                    }
                 }
             }
         }).setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
@@ -314,15 +326,21 @@ public class MapsActivity extends FragmentActivity implements RoutingListener, G
     @Override
     public void onMyLocationChange(Location location) {
         if (timestamp != -1 && timestamp <= (System.currentTimeMillis() - 60000)) {
+            // work out displacement
+            double deltaLat = Math.abs(location.getLatitude() - current.getLatitude());
+            double deltaLon = Math.abs(location.getLongitude() - current.getLongitude());
 
-            String currentLocation = "" + location.getLatitude() + ","
-                    + location.getLongitude();
-            clearMap();
+            // 0.0025106 is approximately 200m
+            if ((deltaLat + deltaLon) >= 0.0025106) {
+                String currentLocation = "" + location.getLatitude() + ","
+                        + location.getLongitude();
+                clearMap();
 
-            Routing routing = new Routing(Routing.TravelMode.DRIVING);
-            routing.registerListener(routeListen);
-            routing.execute(currentLocation, toAddress);
-            timestamp = System.currentTimeMillis();
+                Routing routing = new Routing(Routing.TravelMode.DRIVING);
+                routing.registerListener(routeListen);
+                routing.execute(currentLocation, toAddress);
+                timestamp = System.currentTimeMillis();
+            }
         }
     }
 
